@@ -1,0 +1,7 @@
+//
+// Prefix header for all source files of the 'App With Preferences' target in the 'App With Preferences' project
+//
+
+#ifdef __OBJC__
+    #import <Cocoa/Cocoa.h>
+#endif
