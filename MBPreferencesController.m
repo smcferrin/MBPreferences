@@ -153,9 +153,14 @@ static MBPreferencesController *sharedPreferencesController = nil;
 			}
 			
 			// Add the new items
-			for (id<MBPreferencesModule> module in _modules) {
-				[toolbar insertItemWithItemIdentifier:[module identifier] atIndex:[[toolbar items] count]];
-			}
+//			for (id<MBPreferencesModule> module in _modules) {
+//				[toolbar insertItemWithItemIdentifier:[module identifier] atIndex:[[toolbar items] count]];
+//			}
+            
+            [_modules enumerateObjectsUsingBlock:^(id<MBPreferencesModule> module, NSUInteger idx, BOOL *stop) {
+                [toolbar insertItemWithItemIdentifier:[module identifier] atIndex:[[toolbar items] count]];
+            }];
+            
 		}
 		
 		// Change to the correct module
@@ -166,7 +171,7 @@ static MBPreferencesController *sharedPreferencesController = nil;
 			NSString *savedIdentifier = [[NSUserDefaults standardUserDefaults] stringForKey:MBPreferencesSelectionAutosaveKey];
 			defaultModule = [self moduleForIdentifier:savedIdentifier];
 			
-			if (defaultModule != nil) {
+			if (defaultModule == nil) {
 				defaultModule = [_modules objectAtIndex:0];
 			}
 			
