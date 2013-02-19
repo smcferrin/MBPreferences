@@ -83,10 +83,10 @@
  * @details     MBPreferencesController handles the creation and display of the preferences
  *              window as well as switching between different "modules" using the toolbar.
  */
-@interface MBPreferencesController : NSWindowController <NSToolbarDelegate> {
-	NSArray *_modules;
-	id<MBPreferencesModule> _currentModule;
-}
+@interface MBPreferencesController : NSWindowController <NSToolbarDelegate>
+
+@property (nonatomic, strong) id<MBPreferencesModule>currentModule;
+
 
 /**
  * @name        Accessing the Shared Instance
@@ -114,7 +114,7 @@
  *
  * @see         moduleForIdentifier:
  */
-@property(retain) NSArray *modules;
+@property(nonatomic, strong) NSArray *modules;
 
 /**
  * @brief       The preference module that corresponds to the given identifier.

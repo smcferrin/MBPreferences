@@ -28,17 +28,12 @@
 NSString *MBPreferencesSelectionAutosaveKey = @"MBPreferencesSelection";
 
 @interface MBPreferencesController (Private)
-- (void)_setupToolbar;
-- (void)_selectModule:(NSToolbarItem *)sender;
-- (void)_changeToModule:(id<MBPreferencesModule>)module;
+- (void)setupToolbar;
+- (void)selectModule:(NSToolbarItem *)sender;
+- (void)changeToModule:(id<MBPreferencesModule>)module;
 @end
 
 @implementation MBPreferencesController
-
-#pragma mark -
-#pragma mark Property Synthesis
-
-@synthesize modules=_modules;
 
 #pragma mark -
 #pragma mark Life Cycle
@@ -49,65 +44,24 @@ NSString *MBPreferencesSelectionAutosaveKey = @"MBPreferencesSelection";
 		NSWindow *prefsWindow = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 300, 200) styleMask:(NSTitledWindowMask | NSClosableWindowMask) backing:NSBackingStoreBuffered defer:YES];
 		[prefsWindow setShowsToolbarButton:NO];
 		self.window = prefsWindow;
-		[prefsWindow release];
 		
-		[self _setupToolbar];
+		[self setupToolbar];
 	}
 	return self;
-}
-
-- (void)dealloc
-{
-	self.modules = nil;
-	[super dealloc];
 }
 
 static MBPreferencesController *sharedPreferencesController = nil;
 
 + (MBPreferencesController *)sharedController
 {
-	@synchronized(self) {
-		if (sharedPreferencesController == nil) {
-			[[self alloc] init]; // assignment not done here
-		}
-	}
-	return sharedPreferencesController;
-}
-
-+ (id)allocWithZone:(NSZone *)zone
-{
-	@synchronized(self) {
-		if (sharedPreferencesController == nil) {
-			sharedPreferencesController = [super allocWithZone:zone];
-			return sharedPreferencesController;
-		}
-	}
-	return nil; // on subsequent allocation attempts return nil
-}
-
-- (id)copyWithZone:(NSZone *)zone
-{
-	return self;
-}
-
-- (id)retain
-{
-	return self;
-}
-
-- (NSUInteger)retainCount
-{
-	return NSUIntegerMax; // denotes an object that cannot be released
-}
-
-- (void)release
-{
-	// do nothing
-}
-
-- (id)autorelease
-{
-	return self;
+    static dispatch_once_t pred;
+    static MBPreferencesController *shared = nil;
+    
+    dispatch_once(&pred, ^{
+        shared = [[MBPreferencesController alloc] init];
+    });
+    
+	return shared;
 }
 
 #pragma mark -
@@ -122,7 +76,7 @@ static MBPreferencesController *sharedPreferencesController = nil;
 #pragma mark -
 #pragma mark NSToolbar
 
-- (void)_setupToolbar
+- (void)setupToolbar
 {
 	NSToolbar *toolbar = [[NSToolbar alloc] initWithIdentifier:@"PreferencesToolbar"];
 	[toolbar setDisplayMode:NSToolbarDisplayModeIconAndLabel];
@@ -134,10 +88,10 @@ static MBPreferencesController *sharedPreferencesController = nil;
 
 - (NSArray *)toolbarAllowedItemIdentifiers:(NSToolbar *)toolbar
 {
-	NSMutableArray *identifiers = [NSMutableArray array];
-	for (id<MBPreferencesModule> module in self.modules) {
-		[identifiers addObject:[module identifier]];
-	}
+	NSMutableArray *__weak identifiers = [NSMutableArray array];
+    [self.modules enumerateObjectsUsingBlock:^(id<MBPreferencesModule> module, NSUInteger idx, BOOL *stop) {
+        [identifiers addObject:[module identifier]];
+    }];
 	
 	return identifiers;
 }
@@ -154,15 +108,14 @@ static MBPreferencesController *sharedPreferencesController = nil;
 	id<MBPreferencesModule> module = [self moduleForIdentifier:itemIdentifier];
 	
 	NSToolbarItem *item = [[NSToolbarItem alloc] initWithItemIdentifier:itemIdentifier];
-	if (!module)
-		return [item autorelease];
-	
-	
+	if (module == nil)
+		return item;
+
 	[item setLabel:[module title]];
 	[item setImage:[module image]];
 	[item setTarget:self];
-	[item setAction:@selector(_selectModule:)];
-	return [item autorelease];
+	[item setAction:@selector(selectModule:)];
+	return item;
 }
 
 - (NSArray *)toolbarSelectableItemIdentifiers:(NSToolbar *)toolbar
@@ -175,63 +128,59 @@ static MBPreferencesController *sharedPreferencesController = nil;
 
 - (id<MBPreferencesModule>)moduleForIdentifier:(NSString *)identifier
 {
-	for (id<MBPreferencesModule> module in self.modules) {
-		if ([[module identifier] isEqualToString:identifier]) {
-			return module;
+    id __block retModule;
+    [self.modules enumerateObjectsUsingBlock:^(id module, NSUInteger idx, BOOL *stop) {
+        if ([[module identifier] isEqualToString:identifier]) {
+            retModule = module;
 		}
-	}
-	return nil;
+    }];
+    
+	return retModule;
 }
 
-- (void)setModules:(NSArray *)newModules
-{
-	if (_modules) {
-		[_modules release];
-		_modules = nil;
-	}
-	
-	if (newModules != _modules) {
-		_modules = [newModules retain];
+- (void)setModules:(NSArray *)modules
+{	
+	if (modules != _modules) {
+		_modules = modules;
 		
 		// Reset the toolbar items
-		NSToolbar *toolbar = [self.window toolbar];
-		if (toolbar) {
-			NSInteger index = [[toolbar items] count]-1;
+		NSToolbar *__block toolbar = [self.window toolbar];
+		if (toolbar != nil) {
+			NSInteger index = [[toolbar items] count] -1;
 			while (index > 0) {
 				[toolbar removeItemAtIndex:index];
 				index--;
 			}
 			
 			// Add the new items
-			for (id<MBPreferencesModule> module in self.modules) {
+			for (id<MBPreferencesModule> module in _modules) {
 				[toolbar insertItemWithItemIdentifier:[module identifier] atIndex:[[toolbar items] count]];
 			}
 		}
 		
 		// Change to the correct module
-		if ([self.modules count]) {
+		if ([_modules count]) {
 			id<MBPreferencesModule> defaultModule = nil;
 			
 			// Check the autosave info
 			NSString *savedIdentifier = [[NSUserDefaults standardUserDefaults] stringForKey:MBPreferencesSelectionAutosaveKey];
 			defaultModule = [self moduleForIdentifier:savedIdentifier];
 			
-			if (!defaultModule) {
-				defaultModule = [self.modules objectAtIndex:0];
+			if (defaultModule != nil) {
+				defaultModule = [_modules objectAtIndex:0];
 			}
 			
-			[self _changeToModule:defaultModule];
+			[self changeToModule:defaultModule];
 		}
-		
 	}
 }
 
 - (void)setSelectedPreferenceItemWithIdentifier:(NSString *)identifier
 {
-	[self _changeToModule:[self moduleForIdentifier:identifier]];
+	[self changeToModule:[self moduleForIdentifier:identifier]];
 }
 
-- (void)_selectModule:(NSToolbarItem *)sender
+- (void)selectModule:(NSToolbarItem *)sender
 {
 	if (![sender isKindOfClass:[NSToolbarItem class]])
 		return;
@@ -240,12 +189,12 @@ static MBPreferencesController *sharedPreferencesController = nil;
 	if (!module)
 		return;
 	
-	[self _changeToModule:module];
+	[self changeToModule:module];
 }
 
-- (void)_changeToModule:(id<MBPreferencesModule>)module
+- (void)changeToModule:(id<MBPreferencesModule>)module
 {
-	[[_currentModule view] removeFromSuperview];
+	[[self.currentModule view] removeFromSuperview];
 	
 	NSView *newView = [module view];
 	
@@ -262,8 +211,8 @@ static MBPreferencesController *sharedPreferencesController = nil;
 		[module willBeDisplayed];
 	}
 	
-	_currentModule = module;
-	[[self.window contentView] addSubview:[_currentModule view]];
+	self.currentModule = module;
+	[[self.window contentView] addSubview:[self.currentModule view]];
 	
 	// Autosave the selection
 	[[NSUserDefaults standardUserDefaults] setObject:[module identifier] forKey:MBPreferencesSelectionAutosaveKey];

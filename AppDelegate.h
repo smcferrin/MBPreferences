@@ -9,10 +9,10 @@
 #import <Cocoa/Cocoa.h>
 
 @interface AppDelegate : NSObject <NSApplicationDelegate> {
-    NSWindow *window;
+    NSWindow *__weak window;
 }
 
-@property (assign) IBOutlet NSWindow *window;
+@property (weak) IBOutlet NSWindow *window;
 
 // Show preference window 
 - (void)showPreferences:(id)sender;
